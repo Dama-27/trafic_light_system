@@ -253,6 +253,41 @@
       "top": 24.7,
       "left": -516.9,
       "attrs": { "distance": "19" }
+    },
+    {
+      "type": "wokwi-tm1637-7segment",
+      "id": "displayNorth",
+      "top": -350.0,
+      "left": -160.0,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-tm1637-7segment",
+      "id": "displaySouth",
+      "top": 350.0,
+      "left": -160.0,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-tm1637-7segment",
+      "id": "displayEast",
+      "top": -100.0,
+      "left": 400.0,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-tm1637-7segment",
+      "id": "displayWest",
+      "top": 100.0,
+      "left": -400.0,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btnPedestrian",
+      "top": -250.0,
+      "left": 100.0,
+      "attrs": { "color": "green" }
     }
   ],
   "connections": [
@@ -284,9 +319,9 @@
     [ "bb1:5b.j", "rSouthRed:2", "red", [] ],
     [ "bb1:6b.j", "rSouthOrange:2", "orange", [] ],
     [ "bb1:7b.j", "rSouthGreen:2", "green", [] ],
-    [ "esp:27", "bb1:5b.f", "red", [] ],
-    [ "esp:26", "bb1:6b.f", "orange", [] ],
-    [ "esp:25", "bb1:7b.f", "green", [] ],
+    [ "esp:13", "bb1:5b.f", "red", [] ],
+    [ "esp:12", "bb1:6b.f", "orange", [] ],
+    [ "esp:14", "bb1:7b.f", "green", [] ],
     [ "ledSouthOrange:C", "ledSouthRed:C", "black", [] ],
     [ "ledSouthGreen:C", "ledSouthOrange:C", "black", [] ],
     [ "ledSouthRed:C", "bb1:tn.5", "black", [] ],
@@ -324,9 +359,9 @@
     [ "bb1:13b.j", "rWestRed:2", "red", [] ],
     [ "bb1:14b.j", "rWestOrange:2", "orange", [] ],
     [ "bb1:15b.j", "rWestGreen:2", "green", [] ],
-    [ "esp:4", "bb1:13b.f", "red", [] ],
-    [ "esp:16", "bb1:14b.f", "orange", [] ],
-    [ "esp:17", "bb1:15b.f", "green", [] ],
+    [ "esp:33", "bb1:13b.f", "red", [] ],
+    [ "esp:32", "bb1:14b.f", "orange", [] ],
+    [ "esp:23", "bb1:15b.f", "green", [] ],
     [ "ledWestOrange:C", "ledWestRed:C", "black", [] ],
     [ "ledWestGreen:C", "ledWestOrange:C", "black", [] ],
     [ "ledWestRed:C", "bb1:tn.9", "black", [] ],
@@ -340,7 +375,25 @@
     [ "ultrasonicWestEntry:ECHO", "esp:21", "green", [] ],
     [ "rWestGreen:1", "ledWestGreen:A", "green", [] ],
     [ "rWestOrange:1", "ledWestOrange:A", "green", [] ],
-    [ "rWestRed:1", "ledWestRed:A", "green", [] ]
+    [ "rWestRed:1", "ledWestRed:A", "green", [] ],
+    [ "displayNorth:VCC", "bb1:tp.15", "red", [] ],
+    [ "displayNorth:GND", "bb1:tn.15", "black", [] ],
+    [ "displayNorth:CLK", "esp:27", "blue", [] ],
+    [ "displayNorth:DIO", "esp:26", "green", [] ],
+    [ "displaySouth:VCC", "bb1:tp.16", "red", [] ],
+    [ "displaySouth:GND", "bb1:tn.16", "black", [] ],
+    [ "displaySouth:CLK", "esp:27", "blue", [] ],
+    [ "displaySouth:DIO", "esp:26", "green", [] ],
+    [ "displayEast:VCC", "bb1:tp.17", "red", [] ],
+    [ "displayEast:GND", "bb1:tn.17", "black", [] ],
+    [ "displayEast:CLK", "esp:25", "blue", [] ],
+    [ "displayEast:DIO", "esp:4", "green", [] ],
+    [ "displayWest:VCC", "bb1:tp.18", "red", [] ],
+    [ "displayWest:GND", "bb1:tn.18", "black", [] ],
+    [ "displayWest:CLK", "esp:25", "blue", [] ],
+    [ "displayWest:DIO", "esp:4", "green", [] ],
+    [ "btnPedestrian:1.l", "esp:16", "blue", [] ],
+    [ "btnPedestrian:2.l", "bb1:tn.12", "black", [] ]
   ],
   "dependencies": {}
 }

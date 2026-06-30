@@ -83,31 +83,41 @@ unsigned long lastEventTime[SENSOR_COUNT] = {
   0, 0, 0, 0
 };
 
+// ---------------- Pedestrian and Display Pin Configuration ----------------
+
+#include <TM1637Display.h>
+
+const int NS_CLK = 27;
+const int NS_DIO = 26;
+const int EW_CLK = 25;
+const int EW_DIO = 4;
+const int PEDESTRIAN_BUTTON = 16;
+
+// Shared pedestrian phase request flag
+volatile bool pedestrianRequest = false;
+
+// Pedestrian phase duration (10 seconds)
+#define PEDESTRIAN_TIME 10000UL
+
+// Display objects (displays are connected in parallel for NS and EW)
+TM1637Display nsDisplay(NS_CLK, NS_DIO);
+TM1637Display ewDisplay(EW_CLK, EW_DIO);
+
 // ---------------- Traffic Light Pin Configuration ----------------
 
 // Most traffic light modules with GND pin are active HIGH.
 // If your module works opposite, change this to false.
 #define LED_ACTIVE_HIGH true
 
-// North module
-#define N_RED     13
-#define N_YELLOW  12
-#define N_GREEN   14
+// North and South modules share the same control pins
+#define NS_RED     13
+#define NS_YELLOW  12
+#define NS_GREEN   14
 
-// South module
-#define S_RED     27
-#define S_YELLOW  26
-#define S_GREEN   25
-
-// East module
-#define E_RED     33
-#define E_YELLOW  32
-#define E_GREEN   23
-
-// West module
-#define W_RED      4
-#define W_YELLOW  16
-#define W_GREEN   17
+// East and West modules share the same control pins
+#define EW_RED     33
+#define EW_YELLOW  32
+#define EW_GREEN   23
 
 // ---------------- Traffic Timing Configuration ----------------
 
@@ -137,10 +147,11 @@ enum SignalState {
   STATE_ALL_RED_IDLE,
   STATE_GREEN,
   STATE_YELLOW,
-  STATE_ALL_RED_CLEAR
+  STATE_ALL_RED_CLEAR,
+  STATE_PEDESTRIAN_PHASE
 };
 
-SignalState currentState = STATE_ALL_RED_IDLE;
+volatile SignalState currentState = STATE_ALL_RED_IDLE;
 Phase activePhase = PHASE_NONE;
 Phase lastServedPhase = PHASE_NONE;
 
@@ -174,12 +185,28 @@ void IRAM_ATTR echoISR5() { handleEcho(5); }
 void IRAM_ATTR echoISR6() { handleEcho(6); }
 void IRAM_ATTR echoISR7() { handleEcho(7); }
 
+void IRAM_ATTR pedestrianButtonISR() {
+  if (currentState != STATE_PEDESTRIAN_PHASE) {
+    pedestrianRequest = true;
+  }
+}
+
 // ======================================================
 // Setup
 // ======================================================
 
 void setup() {
   Serial.begin(115200);
+
+  // Initialize TM1637 displays
+  nsDisplay.setBrightness(0x0f);
+  ewDisplay.setBrightness(0x0f);
+  nsDisplay.clear();
+  ewDisplay.clear();
+
+  // Initialize pedestrian button
+  pinMode(PEDESTRIAN_BUTTON, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PEDESTRIAN_BUTTON), pedestrianButtonISR, FALLING);
 
   setupSensors();
   setupTrafficLights();
@@ -222,21 +249,13 @@ void setupSensors() {
 // ======================================================
 
 void setupTrafficLights() {
-  pinMode(N_RED, OUTPUT);
-  pinMode(N_YELLOW, OUTPUT);
-  pinMode(N_GREEN, OUTPUT);
+  pinMode(NS_RED, OUTPUT);
+  pinMode(NS_YELLOW, OUTPUT);
+  pinMode(NS_GREEN, OUTPUT);
 
-  pinMode(S_RED, OUTPUT);
-  pinMode(S_YELLOW, OUTPUT);
-  pinMode(S_GREEN, OUTPUT);
-
-  pinMode(E_RED, OUTPUT);
-  pinMode(E_YELLOW, OUTPUT);
-  pinMode(E_GREEN, OUTPUT);
-
-  pinMode(W_RED, OUTPUT);
-  pinMode(W_YELLOW, OUTPUT);
-  pinMode(W_GREEN, OUTPUT);
+  pinMode(EW_RED, OUTPUT);
+  pinMode(EW_YELLOW, OUTPUT);
+  pinMode(EW_GREEN, OUTPUT);
 }
 
 // ======================================================
@@ -251,64 +270,42 @@ void writeLED(int pin, bool state) {
   }
 }
 
-void setNorth(bool red, bool yellow, bool green) {
-  writeLED(N_RED, red);
-  writeLED(N_YELLOW, yellow);
-  writeLED(N_GREEN, green);
+void setNorthSouth(bool red, bool yellow, bool green) {
+  writeLED(NS_RED, red);
+  writeLED(NS_YELLOW, yellow);
+  writeLED(NS_GREEN, green);
 }
 
-void setSouth(bool red, bool yellow, bool green) {
-  writeLED(S_RED, red);
-  writeLED(S_YELLOW, yellow);
-  writeLED(S_GREEN, green);
-}
-
-void setEast(bool red, bool yellow, bool green) {
-  writeLED(E_RED, red);
-  writeLED(E_YELLOW, yellow);
-  writeLED(E_GREEN, green);
-}
-
-void setWest(bool red, bool yellow, bool green) {
-  writeLED(W_RED, red);
-  writeLED(W_YELLOW, yellow);
-  writeLED(W_GREEN, green);
+void setEastWest(bool red, bool yellow, bool green) {
+  writeLED(EW_RED, red);
+  writeLED(EW_YELLOW, yellow);
+  writeLED(EW_GREEN, green);
 }
 
 void setAllRed() {
-  setNorth(true, false, false);
-  setSouth(true, false, false);
-  setEast(true, false, false);
-  setWest(true, false, false);
+  setNorthSouth(true, false, false);
+  setEastWest(true, false, false);
 }
 
 void setPhaseGreen(Phase phase) {
   if (phase == PHASE_NS) {
-    setNorth(false, false, true);
-    setSouth(false, false, true);
-    setEast(true, false, false);
-    setWest(true, false, false);
+    setNorthSouth(false, false, true);
+    setEastWest(true, false, false);
   } 
   else if (phase == PHASE_EW) {
-    setNorth(true, false, false);
-    setSouth(true, false, false);
-    setEast(false, false, true);
-    setWest(false, false, true);
+    setNorthSouth(true, false, false);
+    setEastWest(false, false, true);
   }
 }
 
 void setPhaseYellow(Phase phase) {
   if (phase == PHASE_NS) {
-    setNorth(false, true, false);
-    setSouth(false, true, false);
-    setEast(true, false, false);
-    setWest(true, false, false);
+    setNorthSouth(false, true, false);
+    setEastWest(true, false, false);
   } 
   else if (phase == PHASE_EW) {
-    setNorth(true, false, false);
-    setSouth(true, false, false);
-    setEast(false, true, false);
-    setWest(false, true, false);
+    setNorthSouth(true, false, false);
+    setEastWest(false, true, false);
   }
 }
 
@@ -631,16 +628,34 @@ void startAllRedClearance() {
   Serial.println("ALL RED clearance started");
 }
 
+void startPedestrianPhase() {
+  // Turn all traffic lights RED
+  setAllRed();
+
+  currentState = STATE_PEDESTRIAN_PHASE;
+  stateStartTime = millis();
+  
+  // Clear pedestrian request flag when pedestrian phase begins
+  pedestrianRequest = false;
+
+  Serial.println("PEDESTRIAN countdown phase started");
+}
+
 void updateTrafficController() {
   unsigned long currentTime = millis();
 
   if (currentState == STATE_ALL_RED_IDLE) {
     setAllRed();
 
-    Phase nextPhase = chooseNextPhase();
+    // Prioritize pedestrian request if active
+    if (pedestrianRequest) {
+      startPedestrianPhase();
+    } else {
+      Phase nextPhase = chooseNextPhase();
 
-    if (nextPhase != PHASE_NONE) {
-      startGreen(nextPhase);
+      if (nextPhase != PHASE_NONE) {
+        startGreen(nextPhase);
+      }
     }
   }
 
@@ -684,6 +699,15 @@ void updateTrafficController() {
       Serial.println("Returning to demand check");
     }
   }
+
+  else if (currentState == STATE_PEDESTRIAN_PHASE) {
+    if (currentTime - stateStartTime >= PEDESTRIAN_TIME) {
+      Serial.println("Pedestrian phase completed");
+      
+      currentState = STATE_ALL_RED_IDLE;
+      stateStartTime = millis();
+    }
+  }
 }
 
 // ======================================================
@@ -695,6 +719,7 @@ String getStateName() {
   if (currentState == STATE_GREEN) return "GREEN";
   if (currentState == STATE_YELLOW) return "YELLOW";
   if (currentState == STATE_ALL_RED_CLEAR) return "ALL RED CLEARANCE";
+  if (currentState == STATE_PEDESTRIAN_PHASE) return "PEDESTRIAN PHASE";
   return "UNKNOWN";
 }
 
@@ -716,6 +741,9 @@ unsigned long getRemainingTimeSeconds() {
   } 
   else if (currentState == STATE_ALL_RED_CLEAR) {
     duration = ALL_RED_TIME;
+  } 
+  else if (currentState == STATE_PEDESTRIAN_PHASE) {
+    duration = PEDESTRIAN_TIME;
   } 
   else {
     return 0;
@@ -782,16 +810,56 @@ void printStatus() {
 }
 
 // ======================================================
-// Future Timer Display Placeholder
+// Timer Display Update
 // ======================================================
 
 void updateTimerDisplay() {
-  // For now, countdown is shown in Serial Monitor.
-  // Later, when the LED display arrives, add display code here.
-  //
-  // Example:
-  // int secondsLeft = getRemainingTimeSeconds();
-  // display.showNumberDec(secondsLeft);
+  static int lastSecondsNS = -1;
+  static int lastSecondsEW = -1;
+  
+  int secondsLeft = getRemainingTimeSeconds();
+
+  if (currentState == STATE_GREEN || currentState == STATE_YELLOW) {
+    if (activePhase == PHASE_NS) {
+      if (secondsLeft != lastSecondsNS) {
+        nsDisplay.showNumberDec(secondsLeft);
+        lastSecondsNS = secondsLeft;
+      }
+      if (lastSecondsEW != -2) {
+        ewDisplay.clear();
+        lastSecondsEW = -2;
+      }
+    } else if (activePhase == PHASE_EW) {
+      if (secondsLeft != lastSecondsEW) {
+        ewDisplay.showNumberDec(secondsLeft);
+        lastSecondsEW = secondsLeft;
+      }
+      if (lastSecondsNS != -2) {
+        nsDisplay.clear();
+        lastSecondsNS = -2;
+      }
+    }
+  } 
+  else if (currentState == STATE_PEDESTRIAN_PHASE) {
+    if (secondsLeft != lastSecondsNS) {
+      nsDisplay.showNumberDec(secondsLeft);
+      lastSecondsNS = secondsLeft;
+    }
+    if (secondsLeft != lastSecondsEW) {
+      ewDisplay.showNumberDec(secondsLeft);
+      lastSecondsEW = secondsLeft;
+    }
+  } 
+  else {
+    if (lastSecondsNS != -2) {
+      nsDisplay.clear();
+      lastSecondsNS = -2;
+    }
+    if (lastSecondsEW != -2) {
+      ewDisplay.clear();
+      lastSecondsEW = -2;
+    }
+  }
 }
 
 // ======================================================
